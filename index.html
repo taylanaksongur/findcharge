@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Şarj Bul">
+<meta name="theme-color" content="#eef2f0">
+<title>Şarj Bul</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: tek kolonlu, telefon öncelikli liste; üstte konum/filtre şeridi, kartlarda büyük kW göstergesi solda */
+:root{
+  --bg:#eef2f0; --surface:#ffffff; --ink:#14201c; --muted:#5b6b65; --line:#d5dfda;
+  --accent:#0d7a6a; --accent-ink:#ffffff;
+  --ac:#5a6f86; --dc:#c26a12; --ultra:#a2246b; --warn:#9a5b00;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1715; --surface:#17221f; --ink:#e4ece8; --muted:#93a59e; --line:#2a3a35;
+  --accent:#3fbfa8; --accent-ink:#06201b; --ac:#8fa7c2; --dc:#f0a050; --ultra:#e56aa9; --warn:#e6b45a; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1715; --surface:#17221f; --ink:#e4ece8; --muted:#93a59e; --line:#2a3a35;
+  --accent:#3fbfa8; --accent-ink:#06201b; --ac:#8fa7c2; --dc:#f0a050; --ultra:#e56aa9; --warn:#e6b45a; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:720px;margin:0 auto;padding-block:16px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font:700 30px/1 var(--f-display);letter-spacing:.01em;margin:0}
+h1 span{color:var(--accent)}
+.where{color:var(--muted);font-size:13px;text-align:right;min-width:0;overflow-wrap:anywhere}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button,select,input{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:9px 12px;cursor:pointer;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn:disabled{opacity:.55;cursor:default}
+.search{display:flex;gap:8px;flex:1 1 220px;min-width:0}
+.search input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:9px 10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:7px 11px;cursor:pointer;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+select,.num{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:7px 8px}
+.num{width:76px;font-family:var(--f-mono)}
+.ctrl{display:flex;flex-direction:column;gap:4px}
+
+.status{font-size:14px;color:var(--muted);padding:2px 2px}
+.status.err{color:var(--warn)}
+
+.list{display:flex;flex-direction:column;gap:10px;list-style:none;margin:0;padding:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;display:grid;grid-template-columns:84px 1fr;overflow:hidden}
+.gauge{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;color:#fff;gap:2px;text-align:center}
+.gauge.ac{background:var(--ac)} .gauge.dc{background:var(--dc)} .gauge.ultra{background:var(--ultra)} .gauge.unk{background:var(--muted)}
+.gauge b{font:700 32px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.gauge small{font:600 11px/1.1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;opacity:.92}
+.body{padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.name{font-weight:600;font-size:16px;min-width:0;overflow-wrap:anywhere}
+.dist{font-family:var(--f-mono);font-size:13px;color:var(--muted);white-space:nowrap}
+.op{font-size:13px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font:500 12px/1 var(--f-mono);border:1px solid var(--line);border-radius:6px;padding:4px 6px;white-space:nowrap}
+.price{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;font-size:14px}
+.price strong{font-family:var(--f-mono);font-size:15px;font-variant-numeric:tabular-nums}
+.price .est{color:var(--muted)}
+.unknown{color:var(--warn);font-size:13px}
+.nav{display:flex;gap:8px;flex-wrap:wrap}
+.nav a{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:5px 9px}
+
+details.panel summary{cursor:pointer;font-weight:600}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:460px}
+th,td{text-align:left;padding:6px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td input{width:70px;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:4px 5px;font-family:var(--f-mono)}
+.note{font-size:12px;color:var(--muted);line-height:1.4}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+footer{font-size:12px;color:var(--muted)}
+footer a{color:inherit}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Şarj<span>Bul</span></h1>
+    <div class="where" id="where">Konum alınmadı</div>
+  </header>
+
+  <section class="panel" aria-label="Konum ve filtreler">
+    <div class="row">
+      <button class="btn primary" id="locBtn" type="button">Konumumu kullan</button>
+      <form class="search" id="searchForm">
+        <input id="q" type="search" placeholder="veya adres / semt ara (ör. Kurtköy)" autocomplete="off">
+        <button class="btn" type="submit">Ara</button>
+      </form>
+    </div>
+    <div class="row" style="gap:14px">
+      <div class="ctrl"><span class="lbl">Sırala</span>
+        <div class="seg" id="sortSeg">
+          <button type="button" data-v="speed" aria-pressed="true">Hız</button>
+          <button type="button" data-v="dist" aria-pressed="false">Mesafe</button>
+          <button type="button" data-v="price" aria-pressed="false">Fiyat</button>
+        </div></div>
+      <div class="ctrl"><span class="lbl">Göster</span>
+        <div class="seg" id="typeSeg">
+          <button type="button" data-v="all" aria-pressed="true">Tümü</button>
+          <button type="button" data-v="dc" aria-pressed="false">DC</button>
+          <button type="button" data-v="ultra" aria-pressed="false">150+ kW</button>
+        </div></div>
+      <div class="ctrl"><label class="lbl" for="radius">Yarıçap</label>
+        <select id="radius"><option value="3000">3 km</option><option value="5000" selected>5 km</option><option value="10000">10 km</option><option value="20000">20 km</option></select></div>
+      <div class="ctrl"><label class="lbl" for="kwh">Dolum (kWh)</label>
+        <input class="num" id="kwh" type="number" min="1" max="200" value="40"></div>
+      <div class="ctrl"><label class="lbl" for="carkw">Aracın max DC kW</label>
+        <input class="num" id="carkw" type="number" min="7" max="400" value="150"></div>
+    </div>
+    <div class="legend"><span><i style="background:var(--ac)"></i>AC ≤ 22 kW</span><span><i style="background:var(--dc)"></i>DC hızlı</span><span><i style="background:var(--ultra)"></i>DC 150+ kW</span><span><i style="background:var(--muted)"></i>Güç bilinmiyor</span></div>
+  </section>
+
+  <div class="status" id="status" role="status">“Konumumu kullan”a dokun; çevrendeki şarj istasyonları OpenStreetMap'ten çekilir.</div>
+  <ul class="list" id="list"></ul>
+
+  <details class="panel" id="pricePanel">
+    <summary>Operatör fiyatları (₺/kWh) – düzenle</summary>
+    <p class="note">Varsayılanlar 2026 sonbaharında yayımlanmış tarifelerden derlendi; operatörler sık güncelliyor ve bazıları DC fiyatını lokasyona göre değiştiriyor. Kendi uygulamanda gördüğün fiyatı yazarsan o kullanılır (bu cihazda saklanır).</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Operatör</th><th>AC</th><th>DC</th><th>DC yüksek güç</th><th>Not</th></tr></thead><tbody id="priceBody"></tbody></table></div>
+    <div class="row"><button class="btn" id="resetPrices" type="button">Varsayılana dön</button></div>
+  </details>
+
+  <footer>İstasyon verisi: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap katkıcıları</a> (Overpass API). OSM'de olmayan veya güç bilgisi girilmemiş istasyonlar eksik görünebilir. Fiyatlar tahminidir; şarjdan önce operatör uygulamasından doğrula.</footer>
+</div>
+
+<script>
+"use strict";
+/* ---------- Fiyat tablosu (₺/kWh). dcHi: bu kW'ın üstünde yüksek güç tarifesi ---------- */
+const DEFAULT_PRICES = [
+  {id:"zes",    name:"ZES",            re:/\bzes\b|zorlu/i,               ac:10.99, dc:12.99, dcHi:16.49, hiKw:180, note:"HPC (180 kW+) 16,49; DC fiyatı lokasyona göre"},
+  {id:"trugo",  name:"Trugo",          re:/trugo|togg/i,                  ac:9.95,  dc:14.98, dcHi:null,  hiKw:null, note:"DC lokasyona göre 12,00–14,98"},
+  {id:"esarj",  name:"Eşarj",          re:/e[sş]arj|enerjisa/i,           ac:9.90,  dc:13.50, dcHi:null,  hiKw:null, note:"DC istasyona göre 9,90–14,90"},
+  {id:"aksa",   name:"Aksa Şarj",      re:/aksa/i,                        ac:8.99,  dc:11.49, dcHi:12.49, hiKw:100,  note:"100 kW üstü 12,49"},
+  {id:"sarjon", name:"Şarjon",         re:/[sş]arjon/i,                   ac:9.99,  dc:11.99, dcHi:13.19, hiKw:89,   note:"90 kW+ 13,19"},
+  {id:"miggo",  name:"Miggo",          re:/miggo/i,                       ac:9.50,  dc:12.50, dcHi:null,  hiKw:null, note:""},
+  {id:"dcharge",name:"D-Charge",       re:/d-?charge/i,                   ac:9.40,  dc:12.99, dcHi:null,  hiKw:null, note:""},
+  {id:"evbee",  name:"Evbee",          re:/evbee/i,                       ac:9.95,  dc:14.98, dcHi:null,  hiKw:null, note:""},
+  {id:"volti",  name:"VoltiNET",       re:/volti/i,                       ac:9.99,  dc:12.99, dcHi:null,  hiKw:null, note:""},
+  {id:"lumicle",name:"Lumicle",        re:/lumicle/i,                     ac:9.99,  dc:13.49, dcHi:null,  hiKw:null, note:""},
+  {id:"astor",  name:"Astor Şarj",     re:/astor/i,                       ac:9.89,  dc:null,  dcHi:null,  hiKw:null, note:"DC fiyatını uygulamadan gir"},
+  {id:"voltrun",name:"Voltrun",        re:/voltrun/i,                     ac:9.90,  dc:null,  dcHi:null,  hiKw:null, note:"DC fiyatını uygulamadan gir"},
+  {id:"shell",  name:"Shell Recharge", re:/shell/i,                       ac:10.50, dc:16.00, dcHi:null,  hiKw:null, note:"Tahmini, eski kaynak"},
+  {id:"tesla",  name:"Tesla Supercharger", re:/tesla/i,                   ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyat Tesla uygulamasında"},
+  {id:"sharz",  name:"Sharz",          re:/sharz/i,                       ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"},
+  {id:"beefull",name:"Beefull",        re:/beefull/i,                     ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"},
+  {id:"wat",    name:"WAT Mobilite",   re:/\bwat\b/i,                     ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"}
+];
+const LS_KEY = "sarjbul.prices.v1";
+function store(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function load(k){try{const s=localStorage.getItem(k);return s?JSON.parse(s):null}catch(e){return null}}
+let overrides = load(LS_KEY) || {};
+function priceRow(p){const o=overrides[p.id]||{};return {...p, ac:o.ac??p.ac, dc:o.dc??p.dc, dcHi:o.dcHi??p.dcHi}}
+
+/* ---------- OSM soket ayrıştırma ---------- */
+const SOCKETS = {
+  type2_combo:{label:"CCS2",dc:true}, chademo:{label:"CHAdeMO",dc:true}, tesla_supercharger:{label:"Tesla",dc:true},
+  tesla_supercharger_ccs:{label:"Tesla CCS",dc:true}, gb_dc:{label:"GB/T DC",dc:true},
+  type2:{label:"Type 2",dc:false}, type2_cable:{label:"Type 2 kablolu",dc:false}, type1:{label:"Type 1",dc:false},
+  schuko:{label:"Schuko",dc:false}, type3c:{label:"Type 3",dc:false}
+};
+function parseKw(v){
+  if(!v) return null;
+  const nums=String(v).replace(/,/g,".").match(/\d+(\.\d+)?/g);
+  if(!nums) return null;
+  let m=Math.max(...nums.map(Number));
+  if(/\bw\b/i.test(v) && !/kw/i.test(v) && m>1000) m=m/1000;
+  else if(m>1000) m=m/1000;
+  return m>0?m:null;
+}
+function analyse(tags){
+  const sockets=[]; let maxKw=null, hasDC=false, hasAC=false, estimated=false;
+  for(const [key,info] of Object.entries(SOCKETS)){
+    const count=tags["socket:"+key];
+    const out=parseKw(tags["socket:"+key+":output"]);
+    if(count===undefined && out===null) continue;
+    if(count==="no") continue;
+    const n=parseInt(count,10);
+    sockets.push({label:info.label,dc:info.dc,kw:out,n:isNaN(n)?null:n});
+    if(info.dc) hasDC=true; else hasAC=true;
+    if(out!==null) maxKw=Math.max(maxKw??0,out);
+  }
+  const generic=parseKw(tags["charging_station:output"]||tags["output"]||tags["maxpower"]);
+  if(generic!==null) maxKw=Math.max(maxKw??0,generic);
+  if(maxKw===null){
+    if(hasDC){maxKw=50;estimated=true}
+    else if(hasAC){maxKw=22;estimated=true}
+  }
+  if(!hasDC && maxKw!==null && maxKw>43 && !estimated) hasDC=true;
+  return {sockets,maxKw,hasDC,estimated};
+}
+function tier(st){
+  if(st.maxKw===null) return "unk";
+  if(st.maxKw>=150) return "ultra";
+  if(st.hasDC||st.maxKw>22) return "dc";
+  return "ac";
+}
+function findOperator(tags){
+  const hay=[tags.operator,tags.brand,tags.network,tags.name,tags["operator:short"]].filter(Boolean).join(" ");
+  if(!hay) return null;
+  return DEFAULT_PRICES.find(p=>p.re.test(hay))||null;
+}
+function stationPrice(st){
+  if(!st.op) return null;
+  const p=priceRow(st.op);
+  if(st.hasDC){
+    let v=p.dc;
+    if(p.dcHi!=null && p.hiKw!=null && st.maxKw!=null && st.maxKw>p.hiKw) v=p.dcHi;
+    return v!=null?{v,kind:"DC"}:(p.ac!=null?{v:p.ac,kind:"AC"}:null);
+  }
+  return p.ac!=null?{v:p.ac,kind:"AC"}:null;
+}
+
+/* ---------- Coğrafya ---------- */
+function haversine(a,b){const R=6371e3,t=x=>x*Math.PI/180;
+  const dLat=t(b.lat-a.lat),dLon=t(b.lon-a.lon);
+  const h=Math.sin(dLat/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h))}
+const fmtTL=v=>v.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2})+" ₺";
+const fmtDist=m=>m<1000?Math.round(m)+" m":(m/1000).toLocaleString("tr-TR",{maximumFractionDigits:1})+" km";
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- Durum ---------- */
+const state={pos:null,label:"",stations:[],sort:"speed",type:"all"};
+const $=id=>document.getElementById(id);
+function setStatus(msg,err){const s=$("status");s.textContent=msg;s.classList.toggle("err",!!err)}
+
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+async function fetchStations(){
+  if(!state.pos) return;
+  const r=+$("radius").value;
+  const q=`[out:json][timeout:25];nwr["amenity"="charging_station"](around:${r},${state.pos.lat},${state.pos.lon});out center tags;`;
+  setStatus("İstasyonlar aranıyor…");
+  let data=null,lastErr=null;
+  for(const url of OVERPASS){
+    try{
+      const res=await fetch(url,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      data=await res.json(); break;
+    }catch(e){lastErr=e}
+  }
+  if(!data){setStatus("İstasyon verisi alınamadı ("+(lastErr?.message||"bağlantı hatası")+"). Biraz sonra tekrar dene.",true);return}
+  state.stations=data.elements.map(el=>{
+    const lat=el.lat??el.center?.lat, lon=el.lon??el.center?.lon;
+    const tags=el.tags||{};
+    const a=analyse(tags);
+    const st={id:el.type+el.id,lat,lon,tags,...a,op:findOperator(tags)};
+    st.dist=haversine(state.pos,{lat,lon});
+    st.tier=tier(st);
+    return st;
+  }).filter(s=>s.lat!=null);
+  render();
+}
+
+function chargeMinutes(st,kwh){
+  if(st.maxKw==null) return null;
+  const car=+$("carkw").value||150;
+  const eff=st.hasDC?Math.min(st.maxKw,car)*0.75:Math.min(st.maxKw,11);
+  return Math.round(kwh/eff*60);
+}
+function fmtDur(min){if(min==null) return "";if(min<60) return min+" dk";const h=Math.floor(min/60),m=min%60;return h+" sa"+(m?" "+m+" dk":"")}
+
+function render(){
+  const kwh=Math.max(1,+$("kwh").value||40);
+  let rows=state.stations.slice();
+  if(state.type==="dc") rows=rows.filter(s=>s.hasDC||s.tier==="dc"||s.tier==="ultra");
+  if(state.type==="ultra") rows=rows.filter(s=>s.maxKw!=null&&s.maxKw>=150);
+  rows.forEach(s=>s.price=stationPrice(s));
+  const by={
+    speed:(a,b)=>(b.maxKw??-1)-(a.maxKw??-1)||a.dist-b.dist,
+    dist:(a,b)=>a.dist-b.dist,
+    price:(a,b)=>(a.price?.v??1e9)-(b.price?.v??1e9)||a.dist-b.dist
+  }[state.sort];
+  rows.sort(by);
+  const list=$("list");
+  if(!state.stations.length){list.innerHTML="";setStatus("Bu yarıçapta OpenStreetMap'te kayıtlı istasyon yok. Yarıçapı büyütmeyi dene.");return}
+  if(!rows.length){list.innerHTML="";setStatus("Filtreye uyan istasyon yok.");return}
+  const dcN=state.stations.filter(s=>s.hasDC).length;
+  setStatus(`${state.stations.length} istasyon bulundu, ${dcN} tanesinde DC var. ${rows.length} gösteriliyor.`);
+  list.innerHTML=rows.map(s=>{
+    const t=s.tags;
+    const name=t.name||t.brand||t.operator||"İsimsiz istasyon";
+    const opName=s.op?s.op.name:(t.operator||t.brand||t.network||"Operatör bilinmiyor");
+    const tierLbl={ac:"AC",dc:"DC",ultra:"Ultra",unk:"?"}[s.tier];
+    const chips=s.sockets.map(k=>`<span class="chip">${esc(k.label)}${k.kw?" · "+k.kw.toLocaleString("tr-TR")+" kW":""}${k.n?" ×"+k.n:""}</span>`).join("");
+    let priceHtml;
+    if(s.price){
+      const cost=s.price.v*kwh;
+      priceHtml=`<div class="price"><span><strong>${fmtTL(s.price.v)}</strong>/kWh ${s.price.kind}</span><span class="est">${kwh} kWh ≈ <strong>${fmtTL(cost)}</strong></span>${s.maxKw?`<span class="est">≈ ${fmtDur(chargeMinutes(s,kwh))}</span>`:""}</div>`;
+    }else{
+      priceHtml=`<div class="unknown">Fiyat bilinmiyor${s.op?" – "+esc(s.op.note||"tabloya gir"):" – operatör eşleşmedi"}</div>`;
+    }
+    const g=`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`;
+    const ap=`https://maps.apple.com/?daddr=${s.lat},${s.lon}&dirflg=d`;
+    return `<li class="card">
+      <div class="gauge ${s.tier}"><b>${s.maxKw!=null?Math.round(s.maxKw):"–"}</b><small>${s.maxKw!=null?"kW":""} ${tierLbl}${s.estimated?"*":""}</small></div>
+      <div class="body">
+        <div class="top"><span class="name">${esc(name)}</span><span class="dist">${fmtDist(s.dist)}</span></div>
+        <div class="op">${esc(opName)}${s.estimated?" · *güç tahmini (OSM'de kW yok)":""}</div>
+        ${chips?`<div class="chips">${chips}</div>`:""}
+        ${priceHtml}
+        <div class="nav"><a href="${g}" target="_blank" rel="noopener">Google Haritalar</a><a href="${ap}" target="_blank" rel="noopener">Apple Haritalar</a></div>
+      </div></li>`;
+  }).join("");
+}
+
+/* ---------- Konum ---------- */
+function setPos(lat,lon,label){
+  state.pos={lat,lon};state.label=label;
+  $("where").textContent=label;
+  fetchStations();
+}
+$("locBtn").addEventListener("click",()=>{
+  if(!("geolocation" in navigator)){setStatus("Bu tarayıcı konum desteklemiyor; adres aramasını kullan.",true);return}
+  setStatus("Konum alınıyor…");
+  navigator.geolocation.getCurrentPosition(
+    p=>setPos(p.coords.latitude,p.coords.longitude,`GPS · ±${Math.round(p.coords.accuracy)} m`),
+    e=>setStatus(e.code===1?"Konum izni verilmedi. Tarayıcı ayarlarından izin ver ya da adres ara.":"Konum alınamadı ("+e.message+"). Adres aramasını dene.",true),
+    {enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+});
+$("searchForm").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const q=$("q").value.trim(); if(!q) return;
+  setStatus("Adres aranıyor…");
+  try{
+    const res=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&accept-language=tr&q="+encodeURIComponent(q));
+    const j=await res.json();
+    if(!j.length){setStatus("“"+q+"” bulunamadı. Farklı yazmayı dene.",true);return}
+    setPos(+j[0].lat,+j[0].lon,j[0].display_name.split(",").slice(0,2).join(","));
+  }catch(e){setStatus("Adres araması başarısız: "+e.message,true)}
+});
+
+/* ---------- Kontroller ---------- */
+function bindSeg(id,key){
+  $(id).addEventListener("click",e=>{
+    const b=e.target.closest("button");if(!b) return;
+    $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));
+    state[key]=b.dataset.v;store("sarjbul."+key,state[key]);render();
+  });
+  const saved=load("sarjbul."+key);
+  if(saved){state[key]=saved;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.v===saved?"true":"false"))}
+}
+bindSeg("sortSeg","sort");bindSeg("typeSeg","type");
+for(const id of ["kwh","carkw"]){
+  const v=load("sarjbul."+id); if(v) $(id).value=v;
+  $(id).addEventListener("input",()=>{store("sarjbul."+id,$(id).value);render()});
+}
+{const v=load("sarjbul.radius"); if(v) $("radius").value=v;}
+$("radius").addEventListener("change",()=>{store("sarjbul.radius",$("radius").value);fetchStations()});
+
+/* ---------- Fiyat tablosu düzenleme ---------- */
+function drawPrices(){
+  $("priceBody").innerHTML=DEFAULT_PRICES.map(p=>{
+    const r=priceRow(p);
+    const inp=(f,v)=>`<input type="number" step="0.01" min="0" inputmode="decimal" id="p-${p.id}-${f}" data-id="${p.id}" data-f="${f}" value="${v??""}" placeholder="–">`;
+    return `<tr><td>${esc(p.name)}</td><td>${inp("ac",r.ac)}</td><td>${inp("dc",r.dc)}</td><td>${p.hiKw!=null?inp("dcHi",r.dcHi)+` <span class="note">&gt;${p.hiKw} kW</span>`:"–"}</td><td class="note">${esc(p.note)}</td></tr>`;
+  }).join("");
+}
+$("priceBody").addEventListener("change",e=>{
+  const i=e.target; if(!i.dataset.id) return;
+  const o=overrides[i.dataset.id]||(overrides[i.dataset.id]={});
+  const v=i.value===""?null:parseFloat(i.value);
+  o[i.dataset.f]=v; store(LS_KEY,overrides); render();
+});
+$("resetPrices").addEventListener("click",()=>{overrides={};store(LS_KEY,overrides);drawPrices();render()});
+drawPrices();
+</script>
+</body>
+</html>
