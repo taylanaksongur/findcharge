@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Şarj Bul">
 <meta name="theme-color" content="#eef2f0">
 <title>Şarj Bul</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -15,7 +16,7 @@
 :root{
   --bg:#eef2f0; --surface:#ffffff; --ink:#14201c; --muted:#5b6b65; --line:#d5dfda;
   --accent:#0d7a6a; --accent-ink:#ffffff;
-  --ac:#5a6f86; --dc:#c26a12; --ultra:#a2246b; --warn:#9a5b00;
+  --ac:#5a6f86; --dc:#c26a12; --ultra:#a2246b; --warn:#9a5b00; --ok:#1d7a3a; --bad:#b3261e;
   --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
   --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -23,9 +24,9 @@
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0f1715; --surface:#17221f; --ink:#e4ece8; --muted:#93a59e; --line:#2a3a35;
-  --accent:#3fbfa8; --accent-ink:#06201b; --ac:#8fa7c2; --dc:#f0a050; --ultra:#e56aa9; --warn:#e6b45a; color-scheme:dark}}
+  --accent:#3fbfa8; --accent-ink:#06201b; --ac:#8fa7c2; --dc:#f0a050; --ultra:#e56aa9; --warn:#e6b45a; --ok:#5fd27f; --bad:#ff7a6e; color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#0f1715; --surface:#17221f; --ink:#e4ece8; --muted:#93a59e; --line:#2a3a35;
-  --accent:#3fbfa8; --accent-ink:#06201b; --ac:#8fa7c2; --dc:#f0a050; --ultra:#e56aa9; --warn:#e6b45a; color-scheme:dark}
+  --accent:#3fbfa8; --accent-ink:#06201b; --ac:#8fa7c2; --dc:#f0a050; --ultra:#e56aa9; --warn:#e6b45a; --ok:#5fd27f; --bad:#ff7a6e; color-scheme:dark}
 
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -45,9 +46,13 @@ button,select,input{font:inherit;color:inherit}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:9px 12px;cursor:pointer;font-weight:500}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn:focus-visible,select:focus-visible,input:focus-visible,.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btn:disabled{opacity:.55;cursor:default}
-.search{display:flex;gap:8px;flex:1 1 220px;min-width:0}
-.search input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:9px 10px}
+#map{height:300px;border-radius:10px;border:1px solid var(--line);z-index:0}
+.hint{font-size:13px;color:var(--muted);flex:1 1 180px;min-width:0}
+.leaflet-container{font:inherit}
+.leaflet-popup-content{margin:10px 12px;font-size:13px}
+.leaflet-popup-content b{font-size:14px}
+.card.hl{outline:2px solid var(--accent);outline-offset:-1px}
+.key input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:9px 10px}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .seg button{border:0;background:transparent;padding:7px 11px;cursor:pointer;font-size:14px}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
@@ -56,8 +61,8 @@ select,.num{border:1px solid var(--line);background:var(--bg);border-radius:9px;
 .num{width:76px;font-family:var(--f-mono)}
 .ctrl{display:flex;flex-direction:column;gap:4px}
 
-.status{font-size:14px;color:var(--muted);padding:2px 2px}
-.status.err{color:var(--warn)}
+.status{font-size:14px;color:var(--muted);padding:2px 2px;display:flex;flex-direction:column;gap:3px}
+.status .err{color:var(--warn)}
 
 .list{display:flex;flex-direction:column;gap:10px;list-style:none;margin:0;padding:0}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;display:grid;grid-template-columns:84px 1fr;overflow:hidden}
@@ -69,23 +74,29 @@ select,.num{border:1px solid var(--line);background:var(--bg);border-radius:9px;
 .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .name{font-weight:600;font-size:16px;min-width:0;overflow-wrap:anywhere}
 .dist{font-family:var(--f-mono);font-size:13px;color:var(--muted);white-space:nowrap}
-.op{font-size:13px;color:var(--muted)}
+.op{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{font:500 12px/1 var(--f-mono);border:1px solid var(--line);border-radius:6px;padding:4px 6px;white-space:nowrap}
+.chip.ok{color:var(--ok);border-color:var(--ok)} .chip.bad{color:var(--bad);border-color:var(--bad)}
+.chip.src{font-family:var(--f-body);font-size:11px;color:var(--muted)}
 .price{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;font-size:14px}
 .price strong{font-family:var(--f-mono);font-size:15px;font-variant-numeric:tabular-nums}
 .price .est{color:var(--muted)}
 .unknown{color:var(--warn);font-size:13px}
+.ocmnote{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 .nav{display:flex;gap:8px;flex-wrap:wrap}
 .nav a{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:5px 9px}
 
 details.panel summary{cursor:pointer;font-weight:600}
+.key{display:flex;flex-direction:column;gap:5px}
+.key .row{flex-wrap:nowrap}
+.key a{color:var(--accent)}
 .tbl-wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px;min-width:460px}
 th,td{text-align:left;padding:6px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 td input{width:70px;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:4px 5px;font-family:var(--f-mono)}
-.note{font-size:12px;color:var(--muted);line-height:1.4}
+.note{font-size:12px;color:var(--muted);line-height:1.4;margin:0}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 footer{font-size:12px;color:var(--muted)}
@@ -103,11 +114,9 @@ footer a{color:inherit}
   <section class="panel" aria-label="Konum ve filtreler">
     <div class="row">
       <button class="btn primary" id="locBtn" type="button">Konumumu kullan</button>
-      <form class="search" id="searchForm">
-        <input id="q" type="search" placeholder="veya adres / semt ara (ör. Kurtköy)" autocomplete="off">
-        <button class="btn" type="submit">Ara</button>
-      </form>
+      <span class="hint">veya haritada aramak istediğin noktaya dokun</span>
     </div>
+    <div id="map" role="application" aria-label="Konum seçme haritası"></div>
     <div class="row" style="gap:14px">
       <div class="ctrl"><span class="lbl">Sırala</span>
         <div class="seg" id="sortSeg">
@@ -131,8 +140,24 @@ footer a{color:inherit}
     <div class="legend"><span><i style="background:var(--ac)"></i>AC ≤ 22 kW</span><span><i style="background:var(--dc)"></i>DC hızlı</span><span><i style="background:var(--ultra)"></i>DC 150+ kW</span><span><i style="background:var(--muted)"></i>Güç bilinmiyor</span></div>
   </section>
 
-  <div class="status" id="status" role="status">“Konumumu kullan”a dokun; çevrendeki şarj istasyonları OpenStreetMap'ten çekilir.</div>
+  <div class="status" id="status" role="status"><span>“Konumumu kullan”a ya da haritada bir noktaya dokun; o noktanın çevresindeki şarj istasyonları aranır.</span></div>
   <ul class="list" id="list"></ul>
+
+  <details class="panel" id="srcPanel">
+    <summary>Veri kaynakları ve API anahtarları</summary>
+    <p class="note">OpenStreetMap anahtarsız çalışır. Aşağıdaki ücretsiz anahtarları girersen o kaynaklar da sorgulanır ve aynı istasyonlar birleştirilir. Anahtarlar yalnızca bu cihazda saklanır.</p>
+    <div class="key">
+      <label class="lbl" for="ocmKey">Open Charge Map anahtarı</label>
+      <div class="row"><input id="ocmKey" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ör. 1a2b3c…"></div>
+      <p class="note">openchargemap.org'da ücretsiz hesap aç → Profil → <b>My Apps</b> → <b>Register an application</b>. <a href="https://openchargemap.org/site/develop/api" target="_blank" rel="noopener">Anahtar sayfası</a></p>
+    </div>
+    <div class="key">
+      <label class="lbl" for="ttKey">TomTom anahtarı</label>
+      <div class="row"><input id="ttKey" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ör. AbCdEf…"></div>
+      <p class="note">developer.tomtom.com'da ücretsiz kayıt ol (kart gerekmez) → Dashboard → <b>Keys</b>'teki anahtarı kopyala. Anlık boş soket bilgisi bu kaynaktan gelir. <a href="https://developer.tomtom.com/" target="_blank" rel="noopener">TomTom Developer</a></p>
+    </div>
+    <div class="row"><button class="btn primary" id="saveKeys" type="button">Kaydet ve yeniden ara</button></div>
+  </details>
 
   <details class="panel" id="pricePanel">
     <summary>Operatör fiyatları (₺/kWh) – düzenle</summary>
@@ -141,135 +166,221 @@ footer a{color:inherit}
     <div class="row"><button class="btn" id="resetPrices" type="button">Varsayılana dön</button></div>
   </details>
 
-  <footer>İstasyon verisi: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap katkıcıları</a> (Overpass API). OSM'de olmayan veya güç bilgisi girilmemiş istasyonlar eksik görünebilir. Fiyatlar tahminidir; şarjdan önce operatör uygulamasından doğrula.</footer>
+  <footer>Veri: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap katkıcıları</a>, <a href="https://openchargemap.org" target="_blank" rel="noopener">Open Charge Map</a> (CC BY-SA), TomTom. Fiyatlar tahminidir; şarjdan önce operatör uygulamasından doğrula.</footer>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 "use strict";
-/* ---------- Fiyat tablosu (₺/kWh). dcHi: bu kW'ın üstünde yüksek güç tarifesi ---------- */
+/* ---------- Fiyat tablosu (₺/kWh). dcHi: hiKw üstündeki yüksek güç tarifesi ---------- */
 const DEFAULT_PRICES = [
-  {id:"zes",    name:"ZES",            re:/\bzes\b|zorlu/i,               ac:10.99, dc:12.99, dcHi:16.49, hiKw:180, note:"HPC (180 kW+) 16,49; DC fiyatı lokasyona göre"},
-  {id:"trugo",  name:"Trugo",          re:/trugo|togg/i,                  ac:9.95,  dc:14.98, dcHi:null,  hiKw:null, note:"DC lokasyona göre 12,00–14,98"},
-  {id:"esarj",  name:"Eşarj",          re:/e[sş]arj|enerjisa/i,           ac:9.90,  dc:13.50, dcHi:null,  hiKw:null, note:"DC istasyona göre 9,90–14,90"},
-  {id:"aksa",   name:"Aksa Şarj",      re:/aksa/i,                        ac:8.99,  dc:11.49, dcHi:12.49, hiKw:100,  note:"100 kW üstü 12,49"},
-  {id:"sarjon", name:"Şarjon",         re:/[sş]arjon/i,                   ac:9.99,  dc:11.99, dcHi:13.19, hiKw:89,   note:"90 kW+ 13,19"},
-  {id:"miggo",  name:"Miggo",          re:/miggo/i,                       ac:9.50,  dc:12.50, dcHi:null,  hiKw:null, note:""},
-  {id:"dcharge",name:"D-Charge",       re:/d-?charge/i,                   ac:9.40,  dc:12.99, dcHi:null,  hiKw:null, note:""},
-  {id:"evbee",  name:"Evbee",          re:/evbee/i,                       ac:9.95,  dc:14.98, dcHi:null,  hiKw:null, note:""},
-  {id:"volti",  name:"VoltiNET",       re:/volti/i,                       ac:9.99,  dc:12.99, dcHi:null,  hiKw:null, note:""},
-  {id:"lumicle",name:"Lumicle",        re:/lumicle/i,                     ac:9.99,  dc:13.49, dcHi:null,  hiKw:null, note:""},
-  {id:"astor",  name:"Astor Şarj",     re:/astor/i,                       ac:9.89,  dc:null,  dcHi:null,  hiKw:null, note:"DC fiyatını uygulamadan gir"},
-  {id:"voltrun",name:"Voltrun",        re:/voltrun/i,                     ac:9.90,  dc:null,  dcHi:null,  hiKw:null, note:"DC fiyatını uygulamadan gir"},
-  {id:"shell",  name:"Shell Recharge", re:/shell/i,                       ac:10.50, dc:16.00, dcHi:null,  hiKw:null, note:"Tahmini, eski kaynak"},
-  {id:"tesla",  name:"Tesla Supercharger", re:/tesla/i,                   ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyat Tesla uygulamasında"},
-  {id:"sharz",  name:"Sharz",          re:/sharz/i,                       ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"},
-  {id:"beefull",name:"Beefull",        re:/beefull/i,                     ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"},
-  {id:"wat",    name:"WAT Mobilite",   re:/\bwat\b/i,                     ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"}
+  {id:"zes",    name:"ZES",            re:/\bzes\b|zorlu/i,     ac:10.99, dc:12.99, dcHi:16.49, hiKw:180, note:"HPC (180 kW+) 16,49; DC fiyatı lokasyona göre"},
+  {id:"trugo",  name:"Trugo",          re:/trugo|togg/i,        ac:9.95,  dc:14.98, dcHi:null,  hiKw:null, note:"DC lokasyona göre 12,00–14,98"},
+  {id:"esarj",  name:"Eşarj",          re:/e[sş]arj|enerjisa/i, ac:9.90,  dc:13.50, dcHi:null,  hiKw:null, note:"DC istasyona göre 9,90–14,90"},
+  {id:"aksa",   name:"Aksa Şarj",      re:/aksa/i,              ac:8.99,  dc:11.49, dcHi:12.49, hiKw:100,  note:"100 kW üstü 12,49"},
+  {id:"sarjon", name:"Şarjon",         re:/[sş]arjon/i,         ac:9.99,  dc:11.99, dcHi:13.19, hiKw:89,   note:"90 kW+ 13,19"},
+  {id:"miggo",  name:"Miggo",          re:/miggo/i,             ac:9.50,  dc:12.50, dcHi:null,  hiKw:null, note:""},
+  {id:"dcharge",name:"D-Charge",       re:/d-?charge/i,         ac:9.40,  dc:12.99, dcHi:null,  hiKw:null, note:""},
+  {id:"evbee",  name:"Evbee",          re:/evbee/i,             ac:9.95,  dc:14.98, dcHi:null,  hiKw:null, note:""},
+  {id:"volti",  name:"VoltiNET",       re:/volti/i,             ac:9.99,  dc:12.99, dcHi:null,  hiKw:null, note:""},
+  {id:"lumicle",name:"Lumicle",        re:/lumicle/i,           ac:9.99,  dc:13.49, dcHi:null,  hiKw:null, note:""},
+  {id:"astor",  name:"Astor Şarj",     re:/astor/i,             ac:9.89,  dc:null,  dcHi:null,  hiKw:null, note:"DC fiyatını uygulamadan gir"},
+  {id:"voltrun",name:"Voltrun",        re:/voltrun/i,           ac:9.90,  dc:null,  dcHi:null,  hiKw:null, note:"DC fiyatını uygulamadan gir"},
+  {id:"shell",  name:"Shell Recharge", re:/shell/i,             ac:10.50, dc:16.00, dcHi:null,  hiKw:null, note:"Tahmini, eski kaynak"},
+  {id:"tesla",  name:"Tesla Supercharger", re:/tesla/i,         ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyat Tesla uygulamasında"},
+  {id:"sharz",  name:"Sharz",          re:/sharz/i,             ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"},
+  {id:"beefull",name:"Beefull",        re:/beefull/i,           ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"},
+  {id:"wat",    name:"WAT Mobilite",   re:/\bwat\b/i,           ac:null,  dc:null,  dcHi:null,  hiKw:null, note:"Fiyatı uygulamadan gir"}
 ];
-const LS_KEY = "sarjbul.prices.v1";
 function store(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function load(k){try{const s=localStorage.getItem(k);return s?JSON.parse(s):null}catch(e){return null}}
-let overrides = load(LS_KEY) || {};
-function priceRow(p){const o=overrides[p.id]||{};return {...p, ac:o.ac??p.ac, dc:o.dc??p.dc, dcHi:o.dcHi??p.dcHi}}
+const LS_PRICES="sarjbul.prices.v1";
+let overrides=load(LS_PRICES)||{};
+function priceRow(p){const o=overrides[p.id]||{};return {...p,ac:o.ac??p.ac,dc:o.dc??p.dc,dcHi:o.dcHi??p.dcHi}}
 
-/* ---------- OSM soket ayrıştırma ---------- */
-const SOCKETS = {
-  type2_combo:{label:"CCS2",dc:true}, chademo:{label:"CHAdeMO",dc:true}, tesla_supercharger:{label:"Tesla",dc:true},
-  tesla_supercharger_ccs:{label:"Tesla CCS",dc:true}, gb_dc:{label:"GB/T DC",dc:true},
-  type2:{label:"Type 2",dc:false}, type2_cable:{label:"Type 2 kablolu",dc:false}, type1:{label:"Type 1",dc:false},
-  schuko:{label:"Schuko",dc:false}, type3c:{label:"Type 3",dc:false}
-};
-function parseKw(v){
-  if(!v) return null;
-  const nums=String(v).replace(/,/g,".").match(/\d+(\.\d+)?/g);
-  if(!nums) return null;
-  let m=Math.max(...nums.map(Number));
-  if(/\bw\b/i.test(v) && !/kw/i.test(v) && m>1000) m=m/1000;
-  else if(m>1000) m=m/1000;
-  return m>0?m:null;
-}
-function analyse(tags){
-  const sockets=[]; let maxKw=null, hasDC=false, hasAC=false, estimated=false;
-  for(const [key,info] of Object.entries(SOCKETS)){
-    const count=tags["socket:"+key];
-    const out=parseKw(tags["socket:"+key+":output"]);
-    if(count===undefined && out===null) continue;
-    if(count==="no") continue;
-    const n=parseInt(count,10);
-    sockets.push({label:info.label,dc:info.dc,kw:out,n:isNaN(n)?null:n});
-    if(info.dc) hasDC=true; else hasAC=true;
-    if(out!==null) maxKw=Math.max(maxKw??0,out);
-  }
-  const generic=parseKw(tags["charging_station:output"]||tags["output"]||tags["maxpower"]);
-  if(generic!==null) maxKw=Math.max(maxKw??0,generic);
-  if(maxKw===null){
-    if(hasDC){maxKw=50;estimated=true}
-    else if(hasAC){maxKw=22;estimated=true}
-  }
-  if(!hasDC && maxKw!==null && maxKw>43 && !estimated) hasDC=true;
-  return {sockets,maxKw,hasDC,estimated};
-}
-function tier(st){
-  if(st.maxKw===null) return "unk";
-  if(st.maxKw>=150) return "ultra";
-  if(st.hasDC||st.maxKw>22) return "dc";
-  return "ac";
-}
-function findOperator(tags){
-  const hay=[tags.operator,tags.brand,tags.network,tags.name,tags["operator:short"]].filter(Boolean).join(" ");
-  if(!hay) return null;
-  return DEFAULT_PRICES.find(p=>p.re.test(hay))||null;
-}
-function stationPrice(st){
-  if(!st.op) return null;
-  const p=priceRow(st.op);
-  if(st.hasDC){
-    let v=p.dc;
-    if(p.dcHi!=null && p.hiKw!=null && st.maxKw!=null && st.maxKw>p.hiKw) v=p.dcHi;
-    return v!=null?{v,kind:"DC"}:(p.ac!=null?{v:p.ac,kind:"AC"}:null);
-  }
-  return p.ac!=null?{v:p.ac,kind:"AC"}:null;
-}
-
-/* ---------- Coğrafya ---------- */
+/* ---------- Yardımcılar ---------- */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtTL=v=>v.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2})+" ₺";
+const fmtDist=m=>m<1000?Math.round(m)+" m":(m/1000).toLocaleString("tr-TR",{maximumFractionDigits:1})+" km";
 function haversine(a,b){const R=6371e3,t=x=>x*Math.PI/180;
   const dLat=t(b.lat-a.lat),dLon=t(b.lon-a.lon);
   const h=Math.sin(dLat/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dLon/2)**2;
   return 2*R*Math.asin(Math.sqrt(h))}
-const fmtTL=v=>v.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2})+" ₺";
-const fmtDist=m=>m<1000?Math.round(m)+" m":(m/1000).toLocaleString("tr-TR",{maximumFractionDigits:1})+" km";
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function parseKw(v){
+  if(v==null||v==="") return null;
+  if(typeof v==="number") return v>0?v:null;
+  const nums=String(v).replace(/,/g,".").match(/\d+(\.\d+)?/g);
+  if(!nums) return null;
+  let m=Math.max(...nums.map(Number));
+  if(m>1000) m=m/1000;
+  return m>0?m:null;
+}
+async function getJSON(url,opts){
+  const ctl=new AbortController();const t=setTimeout(()=>ctl.abort(),20000);
+  try{const r=await fetch(url,{...opts,signal:ctl.signal});
+    if(!r.ok){const e=new Error("HTTP "+r.status);e.status=r.status;throw e}
+    return await r.json()}
+  finally{clearTimeout(t)}
+}
 
-/* ---------- Durum ---------- */
-const state={pos:null,label:"",stations:[],sort:"speed",type:"all"};
-const $=id=>document.getElementById(id);
-function setStatus(msg,err){const s=$("status");s.textContent=msg;s.classList.toggle("err",!!err)}
+/* ---------- Ortak istasyon modeli ----------
+   {lat,lon,name,opText,sockets:[{label,dc,kw,n}],sources:Set,usageCost,availId,avail} */
+function finish(st){
+  let maxKw=null,hasDC=false,hasAC=false;
+  for(const s of st.sockets){ if(s.dc) hasDC=true; else hasAC=true; if(s.kw!=null) maxKw=Math.max(maxKw??0,s.kw) }
+  if(st.extraKw!=null) maxKw=Math.max(maxKw??0,st.extraKw);
+  st.estimated=false;
+  if(maxKw===null){ if(hasDC){maxKw=50;st.estimated=true} else if(hasAC){maxKw=22;st.estimated=true} }
+  if(!hasDC && maxKw!=null && maxKw>43 && !st.estimated) hasDC=true;
+  st.maxKw=maxKw; st.hasDC=hasDC;
+  st.tier=maxKw==null?"unk":maxKw>=150?"ultra":(hasDC||maxKw>22)?"dc":"ac";
+  st.op=findOperator(st.opText+" "+st.name);
+  return st;
+}
+function findOperator(text){ if(!text.trim()) return null; return DEFAULT_PRICES.find(p=>p.re.test(text))||null }
+function addSocket(list,label,dc,kw,n){
+  const ex=list.find(s=>s.label===label&&s.kw===kw);
+  if(ex){ if(n!=null) ex.n=(ex.n||0)+n; } else list.push({label,dc,kw,n:n??null});
+}
 
+/* --- OpenStreetMap (Overpass) --- */
+const OSM_SOCKETS={type2_combo:["CCS2",true],chademo:["CHAdeMO",true],tesla_supercharger:["Tesla",true],tesla_supercharger_ccs:["Tesla CCS",true],gb_dc:["GB/T DC",true],
+  type2:["Type 2",false],type2_cable:["Type 2 kablolu",false],type1:["Type 1",false],schuko:["Schuko",false],type3c:["Type 3",false]};
 const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+async function srcOSM(pos,r){
+  const q=`[out:json][timeout:25];nwr["amenity"="charging_station"](around:${r},${pos.lat},${pos.lon});out center tags;`;
+  let data=null,err=null;
+  for(const url of OVERPASS){
+    try{data=await getJSON(url,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});break}
+    catch(e){err=e}
+  }
+  if(!data) throw err||new Error("bağlantı hatası");
+  return data.elements.map(el=>{
+    const t=el.tags||{};const sockets=[];
+    for(const [k,[label,dc]] of Object.entries(OSM_SOCKETS)){
+      const c=t["socket:"+k],o=parseKw(t["socket:"+k+":output"]);
+      if((c===undefined&&o===null)||c==="no") continue;
+      const n=parseInt(c,10);addSocket(sockets,label,dc,o,isNaN(n)?null:n);
+    }
+    return {lat:el.lat??el.center?.lat,lon:el.lon??el.center?.lon,name:t.name||"",
+      opText:[t.operator,t.brand,t.network].filter(Boolean).join(" · "),
+      sockets,extraKw:parseKw(t["charging_station:output"]||t.output||t.maxpower),
+      sources:new Set(["OSM"]),usageCost:t.charge||null,availId:null,avail:null};
+  }).filter(s=>s.lat!=null);
+}
+
+/* --- Open Charge Map --- */
+function ocmLabel(title){
+  const s=String(title||"");
+  if(/ccs|combo/i.test(s)) return "CCS2";
+  if(/chademo/i.test(s)) return "CHAdeMO";
+  if(/tesla/i.test(s)) return "Tesla";
+  if(/tethered|cable/i.test(s)&&/type ?2/i.test(s)) return "Type 2 kablolu";
+  if(/type ?2|mennekes/i.test(s)) return "Type 2";
+  if(/type ?1|j1772/i.test(s)) return "Type 1";
+  if(/schuko|cee 7/i.test(s)) return "Schuko";
+  return s.replace(/\s*\(.*\)/,"").slice(0,18)||"Soket";
+}
+async function srcOCM(pos,r,key){
+  const url="https://api.openchargemap.io/v3/poi/?output=json&compact=false&verbose=false&maxresults=200&distanceunit=KM"
+    +`&latitude=${pos.lat}&longitude=${pos.lon}&distance=${(r/1000).toFixed(1)}&key=${encodeURIComponent(key)}`;
+  const data=await getJSON(url);
+  return data.map(p=>{
+    const a=p.AddressInfo||{};const sockets=[];
+    for(const c of p.Connections||[]){
+      if(c.StatusType&&c.StatusType.IsOperational===false) continue;
+      const dc=(c.CurrentType&&(c.CurrentType.ID===30||/dc/i.test(c.CurrentType.Title||"")))||/ccs|combo|chademo/i.test(c.ConnectionType?.Title||"");
+      addSocket(sockets,ocmLabel(c.ConnectionType?.Title),!!dc,parseKw(c.PowerKW),c.Quantity??null);
+    }
+    const opT=p.OperatorInfo?.Title;
+    return {lat:a.Latitude,lon:a.Longitude,name:a.Title||"",
+      opText:opT&&!/unknown|business owner/i.test(opT)?opT:"",
+      sockets,extraKw:null,sources:new Set(["OCM"]),usageCost:p.UsageCost||null,availId:null,avail:null};
+  }).filter(s=>s.lat!=null);
+}
+
+/* --- TomTom (Search API, kategori 7309 = EV istasyonu) --- */
+const TT_TYPES={IEC62196Type2CCS:["CCS2",true],IEC62196Type1CCS:["CCS1",true],Chademo:["CHAdeMO",true],Tesla:["Tesla",true],GBT20234Part3:["GB/T DC",true],
+  IEC62196Type2Outlet:["Type 2",false],IEC62196Type2CableAttached:["Type 2 kablolu",false],IEC62196Type1:["Type 1",false],
+  StandardHouseholdCountrySpecific:["Schuko",false],IEC60309AC3PhaseRed:["CEE 3F",false],IEC60309AC1PhaseBlue:["CEE 1F",false]};
+async function srcTomTom(pos,r,key){
+  const url=`https://api.tomtom.com/search/2/nearbySearch/.json?key=${encodeURIComponent(key)}&lat=${pos.lat}&lon=${pos.lon}&radius=${r}&limit=100&categorySet=7309&language=tr-TR`;
+  const data=await getJSON(url);
+  return (data.results||[]).map(x=>{
+    const sockets=[];
+    for(const c of x.chargingPark?.connectors||[]){
+      const m=TT_TYPES[c.connectorType]||[String(c.connectorType||"Soket"),/DC/.test(c.currentType||"")];
+      const dc=m[1]||/DC/.test(c.currentType||"");
+      addSocket(sockets,m[0],dc,parseKw(c.ratedPowerKW),1);
+    }
+    const brands=(x.poi?.brands||[]).map(b=>b.name).join(" · ");
+    return {lat:x.position?.lat,lon:x.position?.lon,name:x.poi?.name||"",opText:brands,
+      sockets,extraKw:null,sources:new Set(["TomTom"]),usageCost:null,
+      availId:x.dataSources?.chargingAvailability?.id||null,avail:null};
+  }).filter(s=>s.lat!=null);
+}
+async function ttAvailability(id,key){
+  const d=await getJSON(`https://api.tomtom.com/search/2/chargingAvailability.json?key=${encodeURIComponent(key)}&chargingAvailability=${encodeURIComponent(id)}`);
+  let total=0,avail=0,occ=0,known=0;
+  for(const c of d.connectors||[]){
+    total+=c.total||0;const cur=c.availability?.current||{};
+    avail+=cur.available||0;occ+=cur.occupied||0;known+=(cur.available||0)+(cur.occupied||0)+(cur.reserved||0)+(cur.outOfService||0);
+  }
+  return {total,avail,occ,known};
+}
+
+/* --- Birleştirme: farklı kaynaklardan 60 m içindeki kayıtlar aynı istasyon sayılır --- */
+const PRI={TomTom:3,OCM:2,OSM:1};
+function merge(lists){
+  const out=[];
+  for(const list of lists) for(const s of list){
+    const twin=out.find(o=>haversine(o,s)<60 && ![...s.sources].some(x=>o.sources.has(x)));
+    if(!twin){out.push(s);continue}
+    const sPri=Math.max(...[...s.sources].map(x=>PRI[x])),oPri=Math.max(...[...twin.sources].map(x=>PRI[x]));
+    const sKw=Math.max(0,...s.sockets.map(k=>k.kw||0)),oKw=Math.max(0,...twin.sockets.map(k=>k.kw||0));
+    if(s.sockets.length && (!twin.sockets.length || sKw>oKw || (sKw===oKw && sPri>oPri))) twin.sockets=s.sockets;
+    if(!twin.name) twin.name=s.name;
+    if(!twin.opText) twin.opText=s.opText;
+    twin.extraKw=Math.max(twin.extraKw??0,s.extraKw??0)||null;
+    twin.usageCost=twin.usageCost||s.usageCost;
+    twin.availId=twin.availId||s.availId;
+    s.sources.forEach(x=>twin.sources.add(x));
+  }
+  return out;
+}
+
+/* ---------- Durum ve arama ---------- */
+const state={pos:null,stations:[],sort:"speed",type:"all",msgs:[],keys:{ocm:load("sarjbul.key.ocm")||"",tt:load("sarjbul.key.tt")||""}};
+function setStatus(lines){$("status").innerHTML=lines.map(l=>`<span class="${l.err?"err":""}">${esc(l.t)}</span>`).join("")}
+let searchSeq=0;
 async function fetchStations(){
   if(!state.pos) return;
-  const r=+$("radius").value;
-  const q=`[out:json][timeout:25];nwr["amenity"="charging_station"](around:${r},${state.pos.lat},${state.pos.lon});out center tags;`;
-  setStatus("İstasyonlar aranıyor…");
-  let data=null,lastErr=null;
-  for(const url of OVERPASS){
-    try{
-      const res=await fetch(url,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
-      if(!res.ok) throw new Error("HTTP "+res.status);
-      data=await res.json(); break;
-    }catch(e){lastErr=e}
-  }
-  if(!data){setStatus("İstasyon verisi alınamadı ("+(lastErr?.message||"bağlantı hatası")+"). Biraz sonra tekrar dene.",true);return}
-  state.stations=data.elements.map(el=>{
-    const lat=el.lat??el.center?.lat, lon=el.lon??el.center?.lon;
-    const tags=el.tags||{};
-    const a=analyse(tags);
-    const st={id:el.type+el.id,lat,lon,tags,...a,op:findOperator(tags)};
-    st.dist=haversine(state.pos,{lat,lon});
-    st.tier=tier(st);
-    return st;
-  }).filter(s=>s.lat!=null);
+  const seq=++searchSeq;const r=+$("radius").value;const pos=state.pos;
+  setStatus([{t:"İstasyonlar aranıyor…"}]);
+  const jobs=[["OpenStreetMap",srcOSM(pos,r)]];
+  if(state.keys.ocm) jobs.push(["Open Charge Map",srcOCM(pos,r,state.keys.ocm)]);
+  if(state.keys.tt) jobs.push(["TomTom",srcTomTom(pos,r,state.keys.tt)]);
+  const res=await Promise.allSettled(jobs.map(j=>j[1]));
+  if(seq!==searchSeq) return;
+  const lists=[],msgs=[];
+  res.forEach((x,i)=>{
+    const name=jobs[i][0];
+    if(x.status==="fulfilled"){lists.push(x.value);msgs.push({t:`${name}: ${x.value.length} kayıt`})}
+    else{const st=x.reason?.status;
+      msgs.push({err:true,t:`${name} alınamadı`+(st===401||st===403?" (anahtar geçersiz ya da bu servise yetkisi yok)":` (${x.reason?.message||"bağlantı hatası"})`)})}
+  });
+  lists.sort((a,b)=>(PRI[[...(b[0]?.sources||[])][0]]||0)-(PRI[[...(a[0]?.sources||[])][0]]||0));
+  state.stations=merge(lists).map(s=>{finish(s);s.dist=haversine(pos,s);return s});
+  state.msgs=msgs;
   render();
+  loadAvailability(seq);
+}
+async function loadAvailability(seq){
+  if(!state.keys.tt) return;
+  const todo=visibleRows().filter(s=>s.availId&&!s.avail).slice(0,12);
+  await Promise.allSettled(todo.map(async s=>{s.avail=await ttAvailability(s.availId,state.keys.tt)}));
+  if(seq===searchSeq && todo.length) render();
 }
 
 function chargeMinutes(st,kwh){
@@ -279,86 +390,124 @@ function chargeMinutes(st,kwh){
   return Math.round(kwh/eff*60);
 }
 function fmtDur(min){if(min==null) return "";if(min<60) return min+" dk";const h=Math.floor(min/60),m=min%60;return h+" sa"+(m?" "+m+" dk":"")}
-
-function render(){
-  const kwh=Math.max(1,+$("kwh").value||40);
+function stationPrice(st){
+  if(!st.op) return null;
+  const p=priceRow(st.op);
+  if(st.hasDC){
+    let v=p.dc;
+    if(p.dcHi!=null&&p.hiKw!=null&&st.maxKw!=null&&st.maxKw>p.hiKw) v=p.dcHi;
+    return v!=null?{v,kind:"DC"}:(p.ac!=null?{v:p.ac,kind:"AC"}:null);
+  }
+  return p.ac!=null?{v:p.ac,kind:"AC"}:null;
+}
+function visibleRows(){
   let rows=state.stations.slice();
-  if(state.type==="dc") rows=rows.filter(s=>s.hasDC||s.tier==="dc"||s.tier==="ultra");
-  if(state.type==="ultra") rows=rows.filter(s=>s.maxKw!=null&&s.maxKw>=150);
+  if(state.type==="dc") rows=rows.filter(s=>s.hasDC);
+  if(state.type==="ultra") rows=rows.filter(s=>s.maxKw!=null&&s.maxKw>=150&&!s.estimated);
   rows.forEach(s=>s.price=stationPrice(s));
   const by={
     speed:(a,b)=>(b.maxKw??-1)-(a.maxKw??-1)||a.dist-b.dist,
     dist:(a,b)=>a.dist-b.dist,
     price:(a,b)=>(a.price?.v??1e9)-(b.price?.v??1e9)||a.dist-b.dist
   }[state.sort];
-  rows.sort(by);
-  const list=$("list");
-  if(!state.stations.length){list.innerHTML="";setStatus("Bu yarıçapta OpenStreetMap'te kayıtlı istasyon yok. Yarıçapı büyütmeyi dene.");return}
-  if(!rows.length){list.innerHTML="";setStatus("Filtreye uyan istasyon yok.");return}
-  const dcN=state.stations.filter(s=>s.hasDC).length;
-  setStatus(`${state.stations.length} istasyon bulundu, ${dcN} tanesinde DC var. ${rows.length} gösteriliyor.`);
-  list.innerHTML=rows.map(s=>{
-    const t=s.tags;
-    const name=t.name||t.brand||t.operator||"İsimsiz istasyon";
-    const opName=s.op?s.op.name:(t.operator||t.brand||t.network||"Operatör bilinmiyor");
+  return rows.sort(by);
+}
+
+function render(){
+  const kwh=Math.max(1,+$("kwh").value||40);
+  const rows=visibleRows();const list=$("list");
+  const head=[];
+  if(!state.stations.length) head.push({t:"Bu yarıçapta kayıtlı istasyon bulunamadı. Yarıçapı büyütmeyi dene."});
+  else if(!rows.length) head.push({t:"Filtreye uyan istasyon yok."});
+  else head.push({t:`${state.stations.length} istasyon (${state.stations.filter(s=>s.hasDC).length} tanesi DC), ${rows.length} gösteriliyor.`});
+  setStatus(head.concat(state.msgs));
+  drawStations(rows);
+  list.innerHTML=rows.map((s,i)=>{
+    const name=s.name||s.opText||"İsimsiz istasyon";
+    const opName=s.op?s.op.name:(s.opText||"Operatör bilinmiyor");
     const tierLbl={ac:"AC",dc:"DC",ultra:"Ultra",unk:"?"}[s.tier];
-    const chips=s.sockets.map(k=>`<span class="chip">${esc(k.label)}${k.kw?" · "+k.kw.toLocaleString("tr-TR")+" kW":""}${k.n?" ×"+k.n:""}</span>`).join("");
+    let chips=s.sockets.map(k=>`<span class="chip">${esc(k.label)}${k.kw?" · "+(+k.kw.toFixed(1)).toLocaleString("tr-TR")+" kW":""}${k.n?" ×"+k.n:""}</span>`).join("");
+    if(s.avail&&s.avail.known){
+      const cls=s.avail.avail>0?"ok":"bad";
+      chips+=`<span class="chip ${cls}">${s.avail.avail>0?"Boş "+s.avail.avail+"/"+s.avail.total:"Şu an dolu"}</span>`;
+    }
+    chips+=[...s.sources].map(x=>`<span class="chip src">${x}</span>`).join("");
     let priceHtml;
     if(s.price){
-      const cost=s.price.v*kwh;
-      priceHtml=`<div class="price"><span><strong>${fmtTL(s.price.v)}</strong>/kWh ${s.price.kind}</span><span class="est">${kwh} kWh ≈ <strong>${fmtTL(cost)}</strong></span>${s.maxKw?`<span class="est">≈ ${fmtDur(chargeMinutes(s,kwh))}</span>`:""}</div>`;
+      priceHtml=`<div class="price"><span><strong>${fmtTL(s.price.v)}</strong>/kWh ${s.price.kind}</span><span class="est">${kwh} kWh ≈ <strong>${fmtTL(s.price.v*kwh)}</strong></span>${s.maxKw?`<span class="est">≈ ${fmtDur(chargeMinutes(s,kwh))}</span>`:""}</div>`;
     }else{
       priceHtml=`<div class="unknown">Fiyat bilinmiyor${s.op?" – "+esc(s.op.note||"tabloya gir"):" – operatör eşleşmedi"}</div>`;
     }
     const g=`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`;
     const ap=`https://maps.apple.com/?daddr=${s.lat},${s.lon}&dirflg=d`;
-    return `<li class="card">
+    return `<li class="card" id="st-${i}">
       <div class="gauge ${s.tier}"><b>${s.maxKw!=null?Math.round(s.maxKw):"–"}</b><small>${s.maxKw!=null?"kW":""} ${tierLbl}${s.estimated?"*":""}</small></div>
       <div class="body">
         <div class="top"><span class="name">${esc(name)}</span><span class="dist">${fmtDist(s.dist)}</span></div>
-        <div class="op">${esc(opName)}${s.estimated?" · *güç tahmini (OSM'de kW yok)":""}</div>
-        ${chips?`<div class="chips">${chips}</div>`:""}
+        <div class="op">${esc(opName)}${s.estimated?" · *güç tahmini (kW bilgisi yok)":""}</div>
+        <div class="chips">${chips}</div>
         ${priceHtml}
+        ${s.usageCost?`<div class="ocmnote">Kaynaktaki ücret notu: ${esc(String(s.usageCost).slice(0,140))}</div>`:""}
         <div class="nav"><a href="${g}" target="_blank" rel="noopener">Google Haritalar</a><a href="${ap}" target="_blank" rel="noopener">Apple Haritalar</a></div>
       </div></li>`;
   }).join("");
 }
 
+/* ---------- Harita ---------- */
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const saved=load("sarjbul.pos");
+const map=L.map("map",{zoomControl:true,tap:true}).setView(saved?[saved.lat,saved.lon]:[41.0,29.05],saved?13:10);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
+const pin=L.marker([0,0],{draggable:true,title:"Arama noktası"});
+const ring=L.circle([0,0],{radius:5000,weight:1,fillOpacity:.06});
+const stationLayer=L.layerGroup().addTo(map);
+pin.on("dragend",()=>{const p=pin.getLatLng();setPos(p.lat,p.lng,"Haritadan seçilen nokta",false)});
+map.on("click",e=>setPos(e.latlng.lat,e.latlng.lng,"Haritadan seçilen nokta",false));
+function drawMapPos(fit){
+  const ll=[state.pos.lat,state.pos.lon];
+  pin.setLatLng(ll).addTo(map);
+  ring.setLatLng(ll).setRadius(+$("radius").value).setStyle({color:css("--accent")}).addTo(map);
+  if(fit) map.fitBounds(ring.getBounds(),{padding:[10,10]});
+}
+function drawStations(rows){
+  stationLayer.clearLayers();
+  const col={ac:css("--ac"),dc:css("--dc"),ultra:css("--ultra"),unk:css("--muted")};
+  rows.forEach((s,i)=>{
+    const m=L.circleMarker([s.lat,s.lon],{radius:s.tier==="ultra"?9:s.tier==="dc"?8:6,color:"#fff",weight:1.5,fillColor:col[s.tier],fillOpacity:.95});
+    m.bindPopup(`<b>${esc(s.name||s.opText||"İstasyon")}</b><br>${s.maxKw!=null?Math.round(s.maxKw)+" kW":"Güç bilinmiyor"}${s.price?" · "+fmtTL(s.price.v)+"/kWh":""}<br><a href="#st-${i}">Listede göster</a>`);
+    m.on("click",()=>highlight(i));
+    stationLayer.addLayer(m);
+  });
+}
+function highlight(i){
+  document.querySelectorAll(".card.hl").forEach(c=>c.classList.remove("hl"));
+  const c=$("st-"+i); if(c){c.classList.add("hl")}
+}
+
 /* ---------- Konum ---------- */
-function setPos(lat,lon,label){
-  state.pos={lat,lon};state.label=label;
-  $("where").textContent=label;
-  fetchStations();
+function setPos(lat,lon,label,fit=true){
+  state.pos={lat,lon};store("sarjbul.pos",state.pos);
+  $("where").textContent=label;drawMapPos(fit);fetchStations();
 }
 $("locBtn").addEventListener("click",()=>{
-  if(!("geolocation" in navigator)){setStatus("Bu tarayıcı konum desteklemiyor; adres aramasını kullan.",true);return}
-  setStatus("Konum alınıyor…");
+  if(!("geolocation" in navigator)){setStatus([{err:true,t:"Bu tarayıcı konum desteklemiyor; adres aramasını kullan."}]);return}
+  setStatus([{t:"Konum alınıyor…"}]);
   navigator.geolocation.getCurrentPosition(
     p=>setPos(p.coords.latitude,p.coords.longitude,`GPS · ±${Math.round(p.coords.accuracy)} m`),
-    e=>setStatus(e.code===1?"Konum izni verilmedi. Tarayıcı ayarlarından izin ver ya da adres ara.":"Konum alınamadı ("+e.message+"). Adres aramasını dene.",true),
+    e=>setStatus([{err:true,t:e.code===1?"Konum izni verilmedi. iPhone: Ayarlar → Gizlilik ve Güvenlik → Konum Servisleri → Safari Web Siteleri → Kullanırken. Ya da haritada bir noktaya dokun.":"Konum alınamadı ("+e.message+"). Haritada bir noktaya dokun."}]),
     {enableHighAccuracy:true,timeout:15000,maximumAge:60000});
-});
-$("searchForm").addEventListener("submit",async ev=>{
-  ev.preventDefault();
-  const q=$("q").value.trim(); if(!q) return;
-  setStatus("Adres aranıyor…");
-  try{
-    const res=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tr&accept-language=tr&q="+encodeURIComponent(q));
-    const j=await res.json();
-    if(!j.length){setStatus("“"+q+"” bulunamadı. Farklı yazmayı dene.",true);return}
-    setPos(+j[0].lat,+j[0].lon,j[0].display_name.split(",").slice(0,2).join(","));
-  }catch(e){setStatus("Adres araması başarısız: "+e.message,true)}
 });
 
 /* ---------- Kontroller ---------- */
 function bindSeg(id,key){
+  const saved=load("sarjbul."+key);
+  if(saved) state[key]=saved;
+  $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.v===state[key]?"true":"false"));
   $(id).addEventListener("click",e=>{
     const b=e.target.closest("button");if(!b) return;
     $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));
-    state[key]=b.dataset.v;store("sarjbul."+key,state[key]);render();
+    state[key]=b.dataset.v;store("sarjbul."+key,state[key]);render();loadAvailability(searchSeq);
   });
-  const saved=load("sarjbul."+key);
-  if(saved){state[key]=saved;$(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.v===saved?"true":"false"))}
 }
 bindSeg("sortSeg","sort");bindSeg("typeSeg","type");
 for(const id of ["kwh","carkw"]){
@@ -366,9 +515,17 @@ for(const id of ["kwh","carkw"]){
   $(id).addEventListener("input",()=>{store("sarjbul."+id,$(id).value);render()});
 }
 {const v=load("sarjbul.radius"); if(v) $("radius").value=v;}
-$("radius").addEventListener("change",()=>{store("sarjbul.radius",$("radius").value);fetchStations()});
+$("radius").addEventListener("change",()=>{store("sarjbul.radius",$("radius").value);if(state.pos) drawMapPos(true);fetchStations()});
 
-/* ---------- Fiyat tablosu düzenleme ---------- */
+$("ocmKey").value=state.keys.ocm;$("ttKey").value=state.keys.tt;
+if(!state.keys.ocm&&!state.keys.tt) $("srcPanel").open=true;
+$("saveKeys").addEventListener("click",()=>{
+  state.keys.ocm=$("ocmKey").value.trim();state.keys.tt=$("ttKey").value.trim();
+  store("sarjbul.key.ocm",state.keys.ocm);store("sarjbul.key.tt",state.keys.tt);
+  if(state.pos) fetchStations(); else setStatus([{t:"Anahtarlar kaydedildi. Şimdi “Konumumu kullan”a dokun."}]);
+});
+
+/* ---------- Fiyat tablosu ---------- */
 function drawPrices(){
   $("priceBody").innerHTML=DEFAULT_PRICES.map(p=>{
     const r=priceRow(p);
@@ -379,10 +536,10 @@ function drawPrices(){
 $("priceBody").addEventListener("change",e=>{
   const i=e.target; if(!i.dataset.id) return;
   const o=overrides[i.dataset.id]||(overrides[i.dataset.id]={});
-  const v=i.value===""?null:parseFloat(i.value);
-  o[i.dataset.f]=v; store(LS_KEY,overrides); render();
+  o[i.dataset.f]=i.value===""?null:parseFloat(i.value);
+  store(LS_PRICES,overrides);render();
 });
-$("resetPrices").addEventListener("click",()=>{overrides={};store(LS_KEY,overrides);drawPrices();render()});
+$("resetPrices").addEventListener("click",()=>{overrides={};store(LS_PRICES,overrides);drawPrices();render()});
 drawPrices();
 </script>
 </body>
